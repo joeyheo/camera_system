@@ -6,10 +6,11 @@
 #    By: joeyheo <sheo2@ucsc.edu>                   +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2023/08/16 15:51:15 by joeyheo           #+#    #+#              #
-#    Updated: 2023/08/16 15:51:26 by joeyheo          ###   ########.fr        #
+#    Updated: 2023/08/16 17:06:10 by joeyheo          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
+# Build for Misung Trading Co. | All Rights Reserved by Joey Heo 
 import cv2
 import numpy as np
 
@@ -50,7 +51,7 @@ def main():
             break
 
         # Add watermark to the captured frame
-        watermarked_frame = add_watermark(frame, "/path/to/your/watermark.png")
+        watermarked_frame = add_watermark(frame, "misung.png")
 
         # Display the watermarked frame
         cv2.imshow('Webcam Feed', watermarked_frame)
