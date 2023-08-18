@@ -1,67 +1,55 @@
-# **************************************************************************** #
-#                                                                              #
-#                                                         :::      ::::::::    #
-#    webcam_feed.py                                     :+:      :+:    :+:    #
-#                                                     +:+ +:+         +:+      #
-#    By: joeyheo <sheo2@ucsc.edu>                   +#+  +:+       +#+         #
-#                                                 +#+#+#+#+#+   +#+            #
-#    Created: 2023/08/16 15:51:15 by joeyheo           #+#    #+#              #
-#    Updated: 2023/08/16 17:06:10 by joeyheo          ###   ########.fr        #
-#                                                                              #
-# **************************************************************************** #
-
-# Build for Misung Trading Co. | All Rights Reserved by Joey Heo 
-import cv2
+import v4l2
+import fcntl
+import mmap
 import numpy as np
+import os
+import struct
 
-def add_watermark(frame, watermark_image_path):
-    watermark = cv2.imread(watermark_image_path, cv2.IMREAD_UNCHANGED)
-    (wH, wW) = watermark.shape[:2]
+def get_frame(fd, width, height):
+    req = v4l2.v4l2_requestbuffers()
+    req.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+    req.memory = v4l2.V4L2_MEMORY_MMAP
+    req.count = 1
 
-    # If the watermark image has a 4th channel, it's considered as an alpha channel which defines transparency
-    if watermark.shape[2] == 4:
-        (B, G, R, A) = cv2.split(watermark)
-        B = cv2.bitwise_and(B, B, mask=A)
-        G = cv2.bitwise_and(G, G, mask=A)
-        R = cv2.bitwise_and(R, R, mask=A)
-        watermark = cv2.merge([B, G, R])
+    fcntl.ioctl(fd, v4l2.VIDIOC_REQBUFS, req)
 
-    # Set the position of the watermark at the bottom-right corner
-    (h, w) = frame.shape[:2]
-    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
-    overlay = np.zeros((h, w, 4), dtype="uint8")
-    overlay[h - wH - 10:h - 10, w - wW - 10:w - 10] = watermark
+    buf = v4l2.v4l2_buffer()
+    buf.type = v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+    buf.memory = v4l2.V4L2_MEMORY_MMAP
+    buf.index = 0
 
-    # Blend the two images together using transparent overlays
-    cv2.addWeighted(overlay, 0.25, frame, 1.0, 0, frame)
+    fcntl.ioctl(fd, v4l2.VIDIOC_QUERYBUF, buf)
 
-    return cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+    mmapped_data = mmap.mmap(
+        fd, buf.length, mmap.MAP_SHARED, mmap.PROT_READ, offset=buf.m.offset
+    )
 
-def main():
-    cap = cv2.VideoCapture(0)  # Open webcam: '0' usually refers to the default webcam
-
-    if not cap.isOpened():
-        print("Could not open webcam!")
-        exit()
+    fcntl.ioctl(fd, v4l2.VIDIOC_QBUF, buf)
+    fcntl.ioctl(fd, v4l2.VIDIOC_STREAMON, v4l2.v4l2_buf_type(v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE))
 
     while True:
-        ret, frame = cap.read()  # Read a frame
+        fcntl.ioctl(fd, v4l2.VIDIOC_DQBUF, buf)
+        raw_frame = np.frombuffer(mmapped_data, dtype=np.uint8, count=width * height).reshape((height, width))
+        yield raw_frame
 
-        if not ret:
-            break
+        fcntl.ioctl(fd, v4l2.VIDIOC_QBUF, buf)
 
-        # Add watermark to the captured frame
-        watermarked_frame = add_watermark(frame, "misung.png")
+def main():
+    width, height = 640, 480
+    webcam_path = '/dev/video0'  # Adjust this path based on your system
 
-        # Display the watermarked frame
-        cv2.imshow('Webcam Feed', watermarked_frame)
+    # Open the webcam device
+    fd = os.open(webcam_path, os.O_RDWR)
 
-        # Close the window when 'q' key is pressed
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    frame_generator = get_frame(fd, width, height)
 
-    cap.release()  # Release the webcam resource
-    cv2.destroyAllWindows()
+    for frame in frame_generator:
+        # You can do whatever you want with each frame here
+        # For this example, let's print the frame size
+        frame_size = struct.calcsize('B') * len(frame)
+        print(f'Frame size: {frame_size} bytes')
 
-if __name__ == "__main__":
+    os.close(fd)
+
+if __name__ == '__main__':
     main()
