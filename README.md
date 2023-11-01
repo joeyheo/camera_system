@@ -1,4 +1,4 @@
-# Misung Webcam Watermarking with OpenCV
+# Webcam Watermarking with OpenCV
 
 This program captures a live video feed from the default webcam, applies a watermark to each frame, and then displays the watermarked video in real-time.
 
